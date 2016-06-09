@@ -43,11 +43,18 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
 
     fn undex(&mut self, key: T, row: usize) {
         use std::collections::hash_map::Entry;
-        if let Entry::Occupied(ref mut e) = self.map.entry(key) {
-            let l = e.get_mut();
-            self.num -= l.len();
-            l.retain(|&i| i != row);
-            self.num += l.len();
+        if let Entry::Occupied(mut e) = self.map.entry(key) {
+            let empty = {
+                let l = e.get_mut();
+                self.num -= l.len();
+                l.retain(|&i| i != row);
+                self.num += l.len();
+                l.len() == 0
+            };
+
+            if empty {
+                e.remove();
+            }
         }
     }
 
