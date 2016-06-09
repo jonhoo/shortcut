@@ -60,8 +60,8 @@ impl<T: Ord + Eq + Hash> RangeIndex<T> for BTreeMap<T, Vec<usize>> {
 }
 
 pub enum Index<T> {
-    Range(RangeIndex<T>),
-    Equality(EqualityIndex<T>),
+    Range(Box<RangeIndex<T>>),
+    Equality(Box<EqualityIndex<T>>),
 }
 
 impl<T> EqualityIndex<T> for Index<T> {
