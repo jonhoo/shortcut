@@ -1,7 +1,8 @@
 language: rust
 rust:
-  - stable
-  - beta
+#  can't support release channels due to #![feature]
+#  - stable
+#  - beta
   - nightly
 cache: cargo
 matrix:
