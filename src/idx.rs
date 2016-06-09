@@ -4,7 +4,7 @@ use std::hash::Hash;
 use std::collections::BTreeMap;
 use std::collections::Bound;
 
-pub trait EqualityIndex<T: Eq> {
+pub trait EqualityIndex<T> {
     fn lookup<'a>(&'a self, &T) -> Box<Iterator<Item = usize> + 'a>;
     fn index(&mut self, T, usize);
     fn undex(&mut self, T, usize);
@@ -30,7 +30,7 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashMap<T, Vec<usize>> {
     }
 }
 
-pub trait RangeIndex<T: Ord + Eq + Hash>: EqualityIndex<T> {
+pub trait RangeIndex<T>: EqualityIndex<T> {
     fn between<'a>(&'a self, Bound<&T>, Bound<&T>) -> Box<Iterator<Item = usize> + 'a>;
 }
 
@@ -56,6 +56,32 @@ impl<T: Ord + Eq + Hash> EqualityIndex<T> for BTreeMap<T, Vec<usize>> {
 impl<T: Ord + Eq + Hash> RangeIndex<T> for BTreeMap<T, Vec<usize>> {
     fn between<'a>(&'a self, min: Bound<&T>, max: Bound<&T>) -> Box<Iterator<Item = usize> + 'a> {
         Box::new(self.range(min, max).flat_map(|rows| rows.1.iter().map(|row| *row)))
+    }
+}
+
+pub enum Index<T> {
+    Range(RangeIndex<T>),
+    Equality(EqualityIndex<T>),
+}
+
+impl<T> EqualityIndex<T> for Index<T> {
+    fn lookup<'a>(&'a self, key: &T) -> Box<Iterator<Item = usize> + 'a> {
+        match *self {
+            Index::Range(ref ri) => ri.lookup(key),
+            Index::Equality(ref ei) => ei.lookup(key),
+        }
+    }
+    fn index(&mut self, key: T, row: usize) {
+        match *self {
+            Index::Range(ref mut ri) => ri.index(key, row),
+            Index::Equality(ref mut ei) => ei.index(key, row),
+        }
+    }
+    fn undex(&mut self, key: T, row: usize) {
+        match *self {
+            Index::Range(ref mut ri) => ri.undex(key, row),
+            Index::Equality(ref mut ei) => ei.undex(key, row),
+        }
     }
 }
 

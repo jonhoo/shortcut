@@ -8,6 +8,7 @@ mod idx;
 pub struct Store<T: PartialOrd> {
     cols: usize,
     rows: Vec<Vec<T>>,
+    indices: HashMap<usize, Box<idx::Index<T>>>,
 }
 
 struct StoreIterator<'a, T: 'a, I: Iterator<Item = usize>> {
@@ -27,6 +28,7 @@ impl<T: PartialOrd> Store<T> {
         Store {
             cols: cols,
             rows: Vec::new(),
+            indices: HashMap::new(),
         }
     }
 
@@ -34,6 +36,7 @@ impl<T: PartialOrd> Store<T> {
         Store {
             cols: cols,
             rows: Vec::with_capacity(rows),
+            indices: HashMap::new(),
         }
     }
 
