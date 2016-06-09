@@ -25,8 +25,8 @@ impl<T: PartialOrd> Comparison<T> {
 }
 
 pub struct Condition<T: PartialOrd> {
-    field: usize,
-    cmp: Comparison<T>,
+    pub field: usize,
+    pub cmp: Comparison<T>,
 }
 
 impl<T: PartialOrd> Condition<T> {

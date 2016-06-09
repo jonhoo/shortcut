@@ -8,24 +8,55 @@ pub trait EqualityIndex<T> {
     fn lookup<'a>(&'a self, &T) -> Box<Iterator<Item = usize> + 'a>;
     fn index(&mut self, T, usize);
     fn undex(&mut self, T, usize);
+
+    /// Give the expected number of rows returned for a key.
+    /// This method may be called often, and in rapid succession, and so should return quickly.
+    fn estimate(&self) -> usize;
 }
 
-impl<T: Eq + Hash> EqualityIndex<T> for HashMap<T, Vec<usize>> {
+pub struct HashIndex<K: Eq + Hash> {
+    num: usize,
+    map: HashMap<K, Vec<usize>>,
+}
+
+impl<K: Eq + Hash> HashIndex<K> {
+    pub fn new() -> HashIndex<K> {
+        HashIndex {
+            map: HashMap::new(),
+            num: 0,
+        }
+    }
+}
+
+impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
     fn lookup<'a>(&'a self, key: &T) -> Box<Iterator<Item = usize> + 'a> {
-        match self.get(key) {
+        match self.map.get(key) {
             Some(ref v) => Box::new(v.iter().map(|row| *row)),
             None => Box::new(None.into_iter()),
         }
     }
 
     fn index(&mut self, key: T, row: usize) {
-        self.entry(key).or_insert_with(Vec::new).push(row);
+        self.map.entry(key).or_insert_with(Vec::new).push(row);
+        self.num += 1;
     }
 
     fn undex(&mut self, key: T, row: usize) {
         use std::collections::hash_map::Entry;
-        if let Entry::Occupied(ref mut e) = self.entry(key) {
-            e.get_mut().retain(|&i| i != row);
+        if let Entry::Occupied(ref mut e) = self.map.entry(key) {
+            let l = e.get_mut();
+            self.num -= l.len();
+            l.retain(|&i| i != row);
+            self.num += l.len();
+        }
+    }
+
+    fn estimate(&self) -> usize {
+        let len = self.map.len();
+        if len > 0 {
+            self.num / self.map.len()
+        } else {
+            0
         }
     }
 }
@@ -34,28 +65,50 @@ pub trait RangeIndex<T>: EqualityIndex<T> {
     fn between<'a>(&'a self, Bound<&T>, Bound<&T>) -> Box<Iterator<Item = usize> + 'a>;
 }
 
-impl<T: Ord + Eq + Hash> EqualityIndex<T> for BTreeMap<T, Vec<usize>> {
+pub struct BTreeIndex<K: Ord + Eq> {
+    num: usize,
+    map: BTreeMap<K, Vec<usize>>,
+}
+
+impl<K: Ord + Eq> BTreeIndex<K> {
+    pub fn new() -> BTreeIndex<K> {
+        BTreeIndex {
+            map: BTreeMap::new(),
+            num: 0,
+        }
+    }
+}
+
+impl<T: Ord + Eq> EqualityIndex<T> for BTreeIndex<T> {
     fn lookup<'a>(&'a self, key: &T) -> Box<Iterator<Item = usize> + 'a> {
-        match self.get(key) {
+        match self.map.get(key) {
             Some(ref v) => Box::new(v.iter().map(|row| *row)),
             None => Box::new(None.into_iter()),
         }
     }
 
     fn index(&mut self, key: T, row: usize) {
-        self.entry(key).or_insert_with(Vec::new).push(row);
+        self.map.entry(key).or_insert_with(Vec::new).push(row);
+        self.num += 1;
     }
 
     fn undex(&mut self, key: T, row: usize) {
         use std::collections::btree_map::Entry;
-        if let Entry::Occupied(ref mut e) = self.entry(key) {
-            e.get_mut().retain(|&i| i != row);
+        if let Entry::Occupied(ref mut e) = self.map.entry(key) {
+            let l = e.get_mut();
+            self.num -= l.len();
+            l.retain(|&i| i != row);
+            self.num += l.len();
         }
     }
+
+    fn estimate(&self) -> usize {
+        self.num / self.map.len()
+    }
 }
-impl<T: Ord + Eq + Hash> RangeIndex<T> for BTreeMap<T, Vec<usize>> {
+impl<T: Ord + Eq> RangeIndex<T> for BTreeIndex<T> {
     fn between<'a>(&'a self, min: Bound<&T>, max: Bound<&T>) -> Box<Iterator<Item = usize> + 'a> {
-        Box::new(self.range(min, max).flat_map(|rows| rows.1.iter().map(|row| *row)))
+        Box::new(self.map.range(min, max).flat_map(|rows| rows.1.iter().map(|row| *row)))
     }
 }
 
@@ -83,18 +136,34 @@ impl<T> EqualityIndex<T> for Index<T> {
             Index::Equality(ref mut ei) => ei.undex(key, row),
         }
     }
+    fn estimate(&self) -> usize {
+        match *self {
+            Index::Range(ref ri) => ri.estimate(),
+            Index::Equality(ref ei) => ei.estimate(),
+        }
+    }
+}
+
+impl<T: Eq + Hash + 'static> From<HashIndex<T>> for Index<T> {
+    fn from(x: HashIndex<T>) -> Index<T> {
+        Index::Equality(Box::new(x))
+    }
+}
+
+impl<T: Ord + Eq + 'static> From<BTreeIndex<T>> for Index<T> {
+    fn from(x: BTreeIndex<T>) -> Index<T> {
+        Index::Range(Box::new(x))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-    use std::collections::BTreeMap;
 
     #[test]
     fn hashmap_eq_index() {
         use super::EqualityIndex;
-        let mut eqidx = HashMap::new();
+        let mut eqidx = HashIndex::new();
         assert_eq!(eqidx.lookup(&"a").count(), 0);
         eqidx.index("a", 0);
         assert_eq!(eqidx.lookup(&"a").count(), 1);
@@ -107,7 +176,7 @@ mod tests {
     #[test]
     fn btree_eq_index() {
         use super::EqualityIndex;
-        let mut idx = BTreeMap::new();
+        let mut idx = BTreeIndex::new();
         assert_eq!(idx.lookup(&"a").count(), 0);
         idx.index("a", 0);
         assert_eq!(idx.lookup(&"a").count(), 1);
@@ -120,9 +189,9 @@ mod tests {
     #[test]
     fn btree_range_index() {
         use super::RangeIndex;
-        use std::collections::Bound::{Included, Unbounded};
+        use std::collections::Bound::Included;
 
-        let mut idx = BTreeMap::new();
+        let mut idx = BTreeIndex::new();
         assert_eq!(idx.between(Included(&"a"), Included(&"b")).count(), 0);
         idx.index("a", 0);
         assert_eq!(idx.between(Included(&"a"), Included(&"b")).count(), 1);
