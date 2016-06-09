@@ -1,41 +1,6 @@
 use std::collections::HashMap;
 
-pub enum Value<T> {
-    Field(usize),
-    Const(T),
-}
-
-impl<T> Value<T> {
-    pub fn value<'a>(&'a self, row: &'a [T]) -> &'a T {
-        match *self {
-            Value::Field(i) => &row[i],
-            Value::Const(ref val) => val,
-        }
-    }
-}
-
-pub enum Comparison<T: PartialOrd> {
-    Equal(Value<T>),
-}
-
-impl<T: PartialOrd> Comparison<T> {
-    pub fn matches(&self, value: &T, row: &[T]) -> bool {
-        match *self {
-            Comparison::Equal(ref v) => value == v.value(row),
-        }
-    }
-}
-
-pub struct Condition<T: PartialOrd> {
-    field: usize,
-    cmp: Comparison<T>,
-}
-
-impl<T: PartialOrd> Condition<T> {
-    pub fn matches(&self, row: &[T]) -> bool {
-        self.cmp.matches(&row[self.field], row)
-    }
-}
+mod cmp;
 
 pub struct Store<T: PartialOrd> {
     cols: usize,
@@ -69,7 +34,9 @@ impl<T: PartialOrd> Store<T> {
         }
     }
 
-    pub fn find<'a>(&'a self, conds: &'a [&[Condition<T>]]) -> Box<Iterator<Item = &'a [T]> + 'a> {
+    pub fn find<'a>(&'a self,
+                    conds: &'a [&[cmp::Condition<T>]])
+                    -> Box<Iterator<Item = &'a [T]> + 'a> {
         Box::new(self.rows
             .iter()
             .filter(move |row| {
