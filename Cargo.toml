@@ -1,6 +1,18 @@
 [package]
 name = "shortcut"
 version = "0.1.0"
+
+description = "an indexed, queryable column-based storage system"
+readme = "README.md"
+
 authors = ["Jon Gjengset <jon@thesquareplanet.com>"]
+
+documentation = "https://jon.tsp.io/crates/shortcut"
+homepage = "https://github.com/jonhoo/shortcut"
+repository = "https://github.com/jonhoo/shortcut.git"
+
+keywords = ["storage","indexing","query","database"]
+
+license = "MIT/Apache-2.0"
 
 [dependencies]
