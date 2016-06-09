@@ -128,6 +128,7 @@ mod tests {
         assert_eq!(store.find(&cmp)
                        .count(),
                    2);
+        assert!(store.find(&cmp).all(|r| r[0] == "a"));
     }
 
     #[test]
@@ -144,6 +145,7 @@ mod tests {
         assert_eq!(store.find(&cmp)
                        .count(),
                    2);
+        assert!(store.find(&cmp).all(|r| r[0] == "a"));
     }
 
     #[test]
@@ -160,5 +162,6 @@ mod tests {
         assert_eq!(store.find(&cmp)
                        .count(),
                    2);
+        assert!(store.find(&cmp).all(|r| r[0] == "a"));
     }
 }
