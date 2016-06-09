@@ -1,5 +1,7 @@
 #![feature(btree_range, collections_bound)]
 
+//! This create provides an indexed, queryable column-based storage system.
+
 use std::collections::HashMap;
 
 mod cmp;
