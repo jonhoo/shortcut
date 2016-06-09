@@ -1,6 +1,9 @@
+#![feature(btree_range, collections_bound)]
+
 use std::collections::HashMap;
 
 mod cmp;
+mod idx;
 
 pub struct Store<T: PartialOrd> {
     cols: usize,
