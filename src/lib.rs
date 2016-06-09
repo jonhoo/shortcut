@@ -78,8 +78,15 @@ impl<T: PartialOrd + Clone> Store<T> {
     }
 
     pub fn index<I: Into<idx::Index<T>>>(&mut self, field: usize, indexer: I) {
-        // TODO: populate index
-        self.indices.insert(field, indexer.into());
+        use idx::EqualityIndex;
+        let mut idx = indexer.into();
+
+        // populate the new index
+        for (rowi, row) in self.rows.iter().enumerate() {
+            idx.index(row[field].clone(), rowi);
+        }
+
+        self.indices.insert(field, idx);
     }
 }
 
@@ -130,6 +137,22 @@ mod tests {
         store.insert(vec!["a", "x1"]);
         store.insert(vec!["a", "x2"]);
         store.insert(vec!["b", "x3"]);
+        let cmp = [cmp::Condition {
+                       field: 0,
+                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                   }];
+        assert_eq!(store.find(&cmp)
+                       .count(),
+                   2);
+    }
+
+    #[test]
+    fn it_filters_with_late_indices() {
+        let mut store = Store::new(2);
+        store.insert(vec!["a", "x1"]);
+        store.insert(vec!["a", "x2"]);
+        store.insert(vec!["b", "x3"]);
+        store.index(0, idx::HashIndex::new());
         let cmp = [cmp::Condition {
                        field: 0,
                        cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
