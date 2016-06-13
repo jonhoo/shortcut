@@ -4,9 +4,15 @@ use std::hash::Hash;
 use std::collections::BTreeMap;
 use std::collections::Bound;
 
+/// An `EqualityIndex` is an index that can perform *efficient* equality lookups.
 pub trait EqualityIndex<T> {
+    /// Return an iterator that yields the indices of all rows that match the given value.
     fn lookup<'a>(&'a self, &T) -> Box<Iterator<Item = usize> + 'a>;
+
+    /// Add the given row index to the index under the given value.
     fn index(&mut self, T, usize);
+
+    /// Remove the given row index under the given value from the index.
     fn undex(&mut self, T, usize);
 
     /// Give the expected number of rows returned for a key.
@@ -14,12 +20,14 @@ pub trait EqualityIndex<T> {
     fn estimate(&self) -> usize;
 }
 
+/// An implementation of `EqualityIndex` that uses a `HashMap`.
 pub struct HashIndex<K: Eq + Hash> {
     num: usize,
     map: HashMap<K, Vec<usize>>,
 }
 
 impl<K: Eq + Hash> HashIndex<K> {
+    /// Allocate a new `HashIndex`.
     pub fn new() -> HashIndex<K> {
         HashIndex {
             map: HashMap::new(),
@@ -68,16 +76,22 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
     }
 }
 
+/// A `RangeIndex` is an index that, in addition to performing efficient equality lookups, can
+/// *also* perform efficient range queries.
 pub trait RangeIndex<T>: EqualityIndex<T> {
+    /// Return an iterator that yields the indices of all rows whose value (in the column this
+    /// index is assigned to) lies within the given `Bound`s.
     fn between<'a>(&'a self, Bound<&T>, Bound<&T>) -> Box<Iterator<Item = usize> + 'a>;
 }
 
+/// An implementation of `RangeIndex` using a `BTreeMap`.
 pub struct BTreeIndex<K: Ord + Eq> {
     num: usize,
     map: BTreeMap<K, Vec<usize>>,
 }
 
 impl<K: Ord + Eq> BTreeIndex<K> {
+    /// Allocate a new `BTreeIndex`.
     pub fn new() -> BTreeIndex<K> {
         BTreeIndex {
             map: BTreeMap::new(),
@@ -119,8 +133,13 @@ impl<T: Ord + Eq> RangeIndex<T> for BTreeIndex<T> {
     }
 }
 
+/// A sum type expressing all different types of indices so they can easily be stored. Since all
+/// indices must at least implement `EqualityIndex`, this enum also forwards all calls of
+/// that trait to the underlying index for convenience.
 pub enum Index<T> {
+    /// A `RangeIndex` trait object.
     Range(Box<RangeIndex<T>>),
+    /// An `EqualityIndex` trait object.
     Equality(Box<EqualityIndex<T>>),
 }
 
