@@ -222,4 +222,16 @@ mod tests {
                    2);
         assert!(store.find(&cmp).all(|r| r[0] == "a"));
     }
+
+    #[test]
+    fn is_send_sync() {
+        use std::sync;
+        use std::thread;
+        let store = sync::Arc::new(Store::<()>::new(0));
+        thread::spawn(move || {
+                drop(store);
+            })
+            .join()
+            .unwrap();
+    }
 }

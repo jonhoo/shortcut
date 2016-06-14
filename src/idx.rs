@@ -138,9 +138,9 @@ impl<T: Ord + Eq> RangeIndex<T> for BTreeIndex<T> {
 /// that trait to the underlying index for convenience.
 pub enum Index<T> {
     /// A `RangeIndex` trait object.
-    Range(Box<RangeIndex<T>>),
+    Range(Box<RangeIndex<T> + Send + Sync>),
     /// An `EqualityIndex` trait object.
-    Equality(Box<EqualityIndex<T>>),
+    Equality(Box<EqualityIndex<T> + Send + Sync>),
 }
 
 impl<T> EqualityIndex<T> for Index<T> {
@@ -170,13 +170,13 @@ impl<T> EqualityIndex<T> for Index<T> {
     }
 }
 
-impl<T: Eq + Hash + 'static> From<HashIndex<T>> for Index<T> {
+impl<T: Eq + Hash + 'static + Send + Sync> From<HashIndex<T>> for Index<T> {
     fn from(x: HashIndex<T>) -> Index<T> {
         Index::Equality(Box::new(x))
     }
 }
 
-impl<T: Ord + Eq + 'static> From<BTreeIndex<T>> for Index<T> {
+impl<T: Ord + Eq + 'static + Send + Sync> From<BTreeIndex<T>> for Index<T> {
     fn from(x: BTreeIndex<T>) -> Index<T> {
         Index::Range(Box::new(x))
     }
