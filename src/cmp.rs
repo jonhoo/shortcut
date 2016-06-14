@@ -1,4 +1,5 @@
 /// A value represents something to compare against.
+#[derive(Clone)]
 pub enum Value<T> {
     /// A constant value literal.
     Const(T),
@@ -21,6 +22,7 @@ impl<T> Value<T> {
 }
 
 /// A comparison to perform for a literal value against a `Value`.
+#[derive(Clone)]
 pub enum Comparison<T: PartialOrd> {
     /// Is the value equal to the given `Value`?
     Equal(Value<T>),
@@ -37,6 +39,7 @@ impl<T: PartialOrd> Comparison<T> {
 }
 
 /// A single condition to evaluate for a row in the dataset.
+#[derive(Clone)]
 pub struct Condition<T: PartialOrd> {
     /// The column of the row to use as the comparison value.
     pub column: usize,
