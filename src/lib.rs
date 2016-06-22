@@ -23,7 +23,7 @@
 //! # Known limitations
 //!
 //!  - The set of match operations is currently fairly limited.
-//!  - The system currently provides an append-only abstraction (i.e., no delete or edit).
+//!  - The system currently provides an add/remove-only abstraction (i.e., no edit).
 
 #![deny(missing_docs)]
 #![feature(btree_range, collections_bound)]
@@ -72,17 +72,12 @@ impl<T: PartialOrd + Clone> Store<T> {
         }
     }
 
-    /// Returns an iterator that yields all rows matching all the given `Condition`s.
-    ///
-    /// This method will automatically determine what index to use to satisfy this query. It
-    /// currently uses a fairly simple heuristic: it picks the index that: a) is over one of
-    /// columns being filtered on; b) supports the operation for that filter; and c) has the lowest
-    /// expected number of rows for a single value. This latter metric is generally the total
-    /// number of rows divided by the number of entries in the index. See `EqualityIndex::estimate`
-    /// for details.
-    pub fn find<'a>(&'a self,
-                    conds: &'a [cmp::Condition<T>])
-                    -> Box<Iterator<Item = &'a [T]> + 'a> {
+    /// Decide what index to use in order to match the given conditions most efficiently. Note that
+    /// the iterator returned by this method will return a superset of the rows that match the
+    /// given conditions. Users will need to match each individual row against `conds` again.
+    fn using_index<'a>(&'a self,
+                       conds: &'a [cmp::Condition<T>])
+                       -> Box<Iterator<Item = usize> + 'a> {
 
         use EqualityIndex;
         let best_idx = conds.iter()
@@ -97,14 +92,53 @@ impl<T: PartialOrd + Clone> Store<T> {
             })
             .min_by_key(|&(_, idx)| idx.estimate());
 
-        let iter = best_idx.and_then(|(ci, idx)| match conds[ci].cmp {
+        best_idx.and_then(|(ci, idx)| match conds[ci].cmp {
                 cmp::Comparison::Equal(cmp::Value::Const(ref v)) => Some(idx.lookup(v)),
                 _ => unreachable!(),
             })
-            .unwrap_or_else(|| Box::new(self.rows.keys().map(|k| *k)));
+            .unwrap_or_else(|| Box::new(self.rows.keys().map(|k| *k)))
+    }
 
-        Box::new(iter.map(move |rowi| &self.rows[&rowi][..])
+    /// Returns an iterator that yields all rows matching all the given `Condition`s.
+    ///
+    /// This method will automatically determine what index to use to satisfy this query. It
+    /// currently uses a fairly simple heuristic: it picks the index that: a) is over one of
+    /// columns being filtered on; b) supports the operation for that filter; and c) has the lowest
+    /// expected number of rows for a single value. This latter metric is generally the total
+    /// number of rows divided by the number of entries in the index. See `EqualityIndex::estimate`
+    /// for details.
+    pub fn find<'a>(&'a self,
+                    conds: &'a [cmp::Condition<T>])
+                    -> Box<Iterator<Item = &'a [T]> + 'a> {
+        Box::new(self.using_index(conds)
+            .map(move |rowi| &self.rows[&rowi][..])
             .filter(move |row| conds.iter().all(|c| c.matches(row))))
+    }
+
+    /// Delete all rows that match the given conditions.
+    pub fn delete(&mut self, conds: &[cmp::Condition<T>]) {
+        // find the rows we should delete
+        let rowids = self.using_index(conds)
+            .map(|rowi| (rowi, &self.rows[&rowi][..]))
+            .filter(move |&(_, row)| conds.iter().all(|c| c.matches(row)))
+            .map(|(rowid, _)| rowid)
+            .collect::<Vec<_>>();
+
+        let deleted = rowids.into_iter()
+            .map(|rowid| (rowid, self.rows.remove(&rowid).unwrap()))
+            .collect::<Vec<_>>();
+
+        // we want to avoid having to clone out of row to pass a T to undex(), which we'd have to
+        // do if it were a Vec (or we'd have to do some trickery to not mess up the indices after
+        // calling .remove()). Instead, we allocate a single HashMap from column index -> T, which
+        // we populate for each row.
+        let mut rowcols = HashMap::with_capacity(self.cols);
+        for (rowid, row) in deleted.into_iter() {
+            rowcols.extend(row.into_iter().enumerate());
+            for (col, idx) in self.indices.iter_mut() {
+                idx.undex(rowcols.remove(col).unwrap(), rowid);
+            }
+        }
     }
 
     /// Insert a new data row into the `Store`. The row **must** have the same number of columns as
@@ -228,4 +262,48 @@ mod tests {
             .join()
             .unwrap();
     }
+
+    #[test]
+    fn it_deletes() {
+        let mut store = Store::new(2);
+        store.insert(vec!["a1", "a2"]);
+        store.insert(vec!["b1", "b2"]);
+        store.insert(vec!["c1", "c2"]);
+        store.delete(&[]);
+        assert_eq!(store.find(&[]).count(), 0);
+    }
+
+    #[test]
+    fn it_deletes_with_filters() {
+        let mut store = Store::new(2);
+        store.insert(vec!["a", "x1"]);
+        store.insert(vec!["a", "x2"]);
+        store.insert(vec!["b", "x3"]);
+        let cmp = [cmp::Condition {
+                       column: 0,
+                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                   }];
+        store.delete(&cmp);
+        assert_eq!(store.find(&cmp).count(), 0);
+        assert_eq!(store.find(&[]).count(), 1);
+        assert!(store.find(&[]).all(|r| r[0] == "b"));
+    }
+
+    #[test]
+    fn it_deletes_with_indices() {
+        let mut store = Store::new(2);
+        store.index(0, idx::HashIndex::new());
+        store.insert(vec!["a", "x1"]);
+        store.insert(vec!["a", "x2"]);
+        store.insert(vec!["b", "x3"]);
+        let cmp = [cmp::Condition {
+                       column: 0,
+                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                   }];
+        store.delete(&cmp);
+        assert_eq!(store.find(&cmp).count(), 0);
+        assert_eq!(store.find(&[]).count(), 1);
+        assert!(store.find(&[]).all(|r| r[0] == "b"));
+    }
+
 }

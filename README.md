@@ -29,4 +29,4 @@ expected number of rows returned for that column for each index.
 ## Known limitations
 
  - The set of match operations is currently fairly limited.
- - The system currently provides an append-only abstraction (i.e., no delete or edit).
+ - The system currently provides an add/remove-only abstraction (i.e., no edit).
