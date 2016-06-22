@@ -8,9 +8,11 @@ This create provides an indexed, queryable column-based storage system.
 
 The storage system is, fundamentally, row-based storage, where all rows have the same number of
 columns. All columns are the same "type", but given that they can be enum types, you can
-effectively use differently typed values. Data is stored in a straightforward `Vec<Vec<T>>`,
-where the outermost `Vec` is dynamically sized (and may be re-allocated as more rows come in),
-whereas the innermost `Vec` is expected to never change.
+effectively use differently typed values. Data is stored in a `BTreeMap<usize, Vec<T>>`,
+where the outermost `BTreeMap` is dynamically sized (and may be re-allocated as more rows come
+in), whereas the innermost `Vec` is expected to never change. The map index is an
+autoincremented row identifier similar to the one used by SQLite:
+https://www.sqlite.org/lang_createtable.html#rowid.
 
 What makes this crate interesting is that it also allows you to place indices on columns for
 fast lookups. These indices are automatically updates whenever the dataset changes, so that

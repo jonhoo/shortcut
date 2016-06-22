@@ -2,9 +2,11 @@
 //!
 //! The storage system is, fundamentally, row-based storage, where all rows have the same number of
 //! columns. All columns are the same "type", but given that they can be enum types, you can
-//! effectively use differently typed values. Data is stored in a straightforward `Vec<Vec<T>>`,
-//! where the outermost `Vec` is dynamically sized (and may be re-allocated as more rows come in),
-//! whereas the innermost `Vec` is expected to never change.
+//! effectively use differently typed values. Data is stored in a `BTreeMap<usize, Vec<T>>`,
+//! where the outermost `BTreeMap` is dynamically sized (and may be re-allocated as more rows come
+//! in), whereas the innermost `Vec` is expected to never change. The map index is an
+//! autoincremented row identifier similar to the one used by SQLite:
+//! https://www.sqlite.org/lang_createtable.html#rowid.
 //!
 //! What makes this crate interesting is that it also allows you to place indices on columns for
 //! fast lookups. These indices are automatically updates whenever the dataset changes, so that
@@ -27,6 +29,7 @@
 #![feature(btree_range, collections_bound)]
 
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// The `cmp` module holds the mechanisms needed to compare values and express conditionals.
 pub mod cmp;
@@ -52,7 +55,8 @@ pub use idx::Index;
 /// be scoped by the lifetime of the `Store`.
 pub struct Store<T: PartialOrd + Clone> {
     cols: usize,
-    rows: Vec<Vec<T>>,
+    rowid: usize,
+    rows: BTreeMap<usize, Vec<T>>,
     indices: HashMap<usize, Index<T>>,
 }
 
@@ -62,19 +66,8 @@ impl<T: PartialOrd + Clone> Store<T> {
     pub fn new(cols: usize) -> Store<T> {
         Store {
             cols: cols,
-            rows: Vec::new(),
-            indices: HashMap::new(),
-        }
-    }
-
-    /// Allocate a new `Store` with the given number of columns, and with room for the given number
-    /// of rows. If you know roughly how many rows will be inserted, this will speed up insertion a
-    /// fair amount, as it avoids needing to re-allocate the underlying `Vec` whenever it needs to
-    /// grow. As with `new`, the column count is checked in `insert` at runtime.
-    pub fn with_capacity(cols: usize, rows: usize) -> Store<T> {
-        Store {
-            cols: cols,
-            rows: Vec::with_capacity(rows),
+            rowid: 0,
+            rows: BTreeMap::new(),
             indices: HashMap::new(),
         }
     }
@@ -108,9 +101,9 @@ impl<T: PartialOrd + Clone> Store<T> {
                 cmp::Comparison::Equal(cmp::Value::Const(ref v)) => Some(idx.lookup(v)),
                 _ => unreachable!(),
             })
-            .unwrap_or_else(|| Box::new(0..self.rows.len()));
+            .unwrap_or_else(|| Box::new(self.rows.keys().map(|k| *k)));
 
-        Box::new(iter.map(move |rowi| &self.rows[rowi][..])
+        Box::new(iter.map(move |rowi| &self.rows[&rowi][..])
             .filter(move |row| conds.iter().all(|c| c.matches(row))))
     }
 
@@ -118,17 +111,18 @@ impl<T: PartialOrd + Clone> Store<T> {
     /// specified when the `Store` was created. If it does not, the code will panic with an
     /// assertion failure.
     ///
-    /// Inserting a row has similar complexity to `Vec::push`, and *may* need to re-allocate the
-    /// backing memory for the `Store`. The insertion also updates all maintained indices, which
-    /// may also re-allocate.
+    /// Inserting a row has similar complexity to `BTreeMap::insert`, and *may* need to re-allocate
+    /// the backing memory for the `Store`. The insertion also updates all maintained indices,
+    /// which may also re-allocate.
     pub fn insert(&mut self, row: Vec<T>) {
         assert_eq!(row.len(), self.cols);
-        let rowi = self.rows.len();
+        let rowid = self.rowid;
         for (column, idx) in self.indices.iter_mut() {
             use EqualityIndex;
-            idx.index(row[*column].clone(), rowi);
+            idx.index(row[*column].clone(), rowid);
         }
-        self.rows.push(row);
+        self.rows.insert(self.rowid, row);
+        self.rowid += 1;
     }
 
     /// Add an index on the given colum using the given indexer. The indexer *must*, at the very
@@ -142,8 +136,8 @@ impl<T: PartialOrd + Clone> Store<T> {
         let mut idx = indexer.into();
 
         // populate the new index
-        for (rowi, row) in self.rows.iter().enumerate() {
-            idx.index(row[column].clone(), rowi);
+        for (rowid, row) in self.rows.iter() {
+            idx.index(row[column].clone(), *rowid);
         }
 
         self.indices.insert(column, idx);
