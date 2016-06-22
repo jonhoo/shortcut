@@ -235,6 +235,25 @@ mod tests {
     }
 
     #[test]
+    fn it_filters_with_partial_indices() {
+        let mut store = Store::new(2);
+        store.index(0, idx::HashIndex::new());
+        store.insert(vec!["a", "x1"]);
+        store.insert(vec!["a", "x2"]);
+        store.insert(vec!["b", "x3"]);
+        let cmp = [cmp::Condition {
+                       column: 0,
+                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                   },
+                   cmp::Condition {
+                       column: 1,
+                       cmp: cmp::Comparison::Equal(cmp::Value::Const("x2")),
+                   }];
+        assert_eq!(store.find(&cmp).count(), 1);
+        assert!(store.find(&cmp).all(|r| r[0] == "a" && r[1] == "x2"));
+    }
+
+    #[test]
     fn it_filters_with_late_indices() {
         let mut store = Store::new(2);
         store.insert(vec!["a", "x1"]);
@@ -306,4 +325,25 @@ mod tests {
         assert!(store.find(&[]).all(|r| r[0] == "b"));
     }
 
+    #[test]
+    fn it_deletes_with_partial_indices() {
+        let mut store = Store::new(2);
+        store.index(0, idx::HashIndex::new());
+        store.insert(vec!["a", "x1"]);
+        store.insert(vec!["a", "x2"]);
+        store.insert(vec!["b", "x3"]);
+        let cmp = [cmp::Condition {
+                       column: 0,
+                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                   },
+                   cmp::Condition {
+                       column: 1,
+                       cmp: cmp::Comparison::Equal(cmp::Value::Const("x2")),
+                   }];
+        store.delete(&cmp);
+        assert_eq!(store.find(&cmp).count(), 0);
+        assert_eq!(store.find(&[]).count(), 2);
+        assert!(store.find(&[]).any(|r| r[0] == "a" && r[1] == "x1"));
+        assert!(store.find(&[]).any(|r| r[0] == "b" && r[1] == "x3"));
+    }
 }
