@@ -117,10 +117,19 @@ impl<T: PartialOrd + Clone> Store<T> {
 
     /// Delete all rows that match the given conditions.
     pub fn delete(&mut self, conds: &[cmp::Condition<T>]) {
+        self.delete_filter(conds, |_| true);
+    }
+
+    /// Delete all rows that match the given conditions *and* where the given filter function
+    /// returns true.
+    pub fn delete_filter<F: FnMut(&[T]) -> bool>(&mut self,
+                                                 conds: &[cmp::Condition<T>],
+                                                 mut f: F) {
         // find the rows we should delete
         let rowids = self.using_index(conds)
             .map(|rowi| (rowi, &self.rows[&rowi][..]))
             .filter(move |&(_, row)| conds.iter().all(|c| c.matches(row)))
+            .filter(|&(_, row)| f(row))
             .map(|(rowid, _)| rowid)
             .collect::<Vec<_>>();
 
@@ -290,6 +299,17 @@ mod tests {
         store.insert(vec!["c1", "c2"]);
         store.delete(&[]);
         assert_eq!(store.find(&[]).count(), 0);
+    }
+
+    #[test]
+    fn filtered_delete() {
+        let mut store = Store::new(2);
+        store.insert(vec!["a1", "a2"]);
+        store.insert(vec!["b1", "b2"]);
+        store.insert(vec!["c1", "c2"]);
+        store.delete_filter(&[], |row| row[0] != "b1");
+        assert_eq!(store.find(&[]).count(), 1);
+        assert!(store.find(&[]).all(|r| r[0] == "b1"));
     }
 
     #[test]
