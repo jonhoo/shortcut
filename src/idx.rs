@@ -60,7 +60,7 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
                     }
                     None => unreachable!(),
                 }
-                l.len() == 0
+                l.is_empty()
             };
 
             if empty {
