@@ -54,9 +54,12 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
         if let Entry::Occupied(mut e) = self.map.entry(key) {
             let empty = {
                 let l = e.get_mut();
-                self.num -= l.len();
-                l.retain(|&i| i != row);
-                self.num += l.len();
+                match l.iter().position(|&r| r == row) {
+                    Some(i) => {
+                        l.swap_remove(i);
+                    }
+                    None => unreachable!(),
+                }
                 l.len() == 0
             };
 
