@@ -1,3 +1,5 @@
+use std::fmt;
+
 /// A value represents something to compare against.
 #[derive(Clone, Debug)]
 pub enum Value<T> {
@@ -56,6 +58,29 @@ impl<T: PartialOrd> Condition<T> {
     }
 }
 
+impl<T: fmt::Display> fmt::Display for Value<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Value::Column(i) => write!(f, "{}", i),
+            Value::Const(ref val) => write!(f, "{}", val),
+        }
+    }
+}
+
+impl<T: PartialOrd + fmt::Display> fmt::Display for Comparison<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Comparison::Equal(ref v) => write!(f, "= {}", v),
+        }
+    }
+}
+
+impl<T: PartialOrd + fmt::Display> fmt::Display for Condition<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "[{}] {}", self.column, self.cmp)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,5 +124,21 @@ mod tests {
         assert!(!cca.matches(&["b"]));
         assert!(ccb.matches(&["b"]));
         assert!(!ccb.matches(&["a"]));
+    }
+
+    #[test]
+    fn display() {
+        let cf01: Condition<String> = Condition {
+            column: 0,
+            cmp: Comparison::Equal(Value::Column(1)),
+        };
+
+        let cca = Condition {
+            column: 0,
+            cmp: Comparison::Equal(Value::Const("a")),
+        };
+
+        assert_eq!(format!("{}", cf01), "[0] = 1");
+        assert_eq!(format!("{}", cca), "[0] = a")
     }
 }
