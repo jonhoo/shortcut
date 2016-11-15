@@ -16,3 +16,12 @@ keywords = ["storage","indexing","query","database"]
 license = "MIT/Apache-2.0"
 
 [dependencies]
+
+[dev-dependencies]
+docopt = "0.6"
+time = "0.1"
+
+[[bench]]
+name = "bench"
+path = "benches/bench.rs"
+harness = false
