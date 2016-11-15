@@ -61,7 +61,7 @@ impl<T: PartialOrd> Condition<T> {
 impl<T: fmt::Display> fmt::Display for Value<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Value::Column(i) => write!(f, "{}", i),
+            Value::Column(i) => write!(f, "[{}]", i),
             Value::Const(ref val) => write!(f, "{}", val),
         }
     }
@@ -138,7 +138,7 @@ mod tests {
             cmp: Comparison::Equal(Value::Const("a")),
         };
 
-        assert_eq!(format!("{}", cf01), "[0] = 1");
+        assert_eq!(format!("{}", cf01), "[0] = [1]");
         assert_eq!(format!("{}", cca), "[0] = a")
     }
 }
