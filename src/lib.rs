@@ -129,9 +129,9 @@ impl<T: Ord + Clone> Store<T> {
 
     /// Delete all rows that match the given conditions *and* where the given filter function
     /// returns true.
-    pub fn delete_filter<F: FnMut(&[T]) -> bool>(&mut self,
-                                                 conds: &[cmp::Condition<T>],
-                                                 mut f: F) {
+    pub fn delete_filter<F>(&mut self, conds: &[cmp::Condition<T>], mut f: F)
+        where F: FnMut(&[T]) -> bool
+    {
         // find the rows we should delete
         let rowids = self.using_index(conds)
             .map(|rowi| (rowi, &self.rows[&rowi][..]))
@@ -291,9 +291,7 @@ mod tests {
         use std::sync;
         use std::thread;
         let store = sync::Arc::new(Store::<()>::new(0));
-        thread::spawn(move || {
-                drop(store);
-            })
+        thread::spawn(move || { drop(store); })
             .join()
             .unwrap();
     }
