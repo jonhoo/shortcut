@@ -82,7 +82,7 @@ impl<T: Ord + Clone> Store<T> {
     /// `.collect()` the results and continue referring to them after the conditions have gone out
     /// of scope.
     fn using_index<'c, 's: 'c>(&'s self,
-                               conds: &'c [cmp::Condition<T>])
+                               conds: &'c [cmp::Condition<'c, T>])
                                -> Box<Iterator<Item = usize> + 's> {
 
         use EqualityIndex;
@@ -114,7 +114,7 @@ impl<T: Ord + Clone> Store<T> {
     /// number of rows divided by the number of entries in the index. See `EqualityIndex::estimate`
     /// for details.
     pub fn find<'c, 's: 'c>(&'s self,
-                            conds: &'c [cmp::Condition<T>])
+                            conds: &'c [cmp::Condition<'c, T>])
                             -> Box<Iterator<Item = &'s [T]> + 'c> {
         let is_a_match = move |r: &&'s _| conds.iter().all(|c| c.matches(r));
         Box::new(self.using_index(conds)
@@ -225,7 +225,7 @@ mod tests {
         store.insert(vec!["b", "x3"]);
         let cmp = [cmp::Condition {
                        column: 0,
-                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                       cmp: cmp::Comparison::Equal(cmp::Value::new("a")),
                    }];
         assert_eq!(store.find(&cmp)
                        .count(),
@@ -242,7 +242,7 @@ mod tests {
         store.insert(vec!["b", "x3"]);
         let cmp = [cmp::Condition {
                        column: 0,
-                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                       cmp: cmp::Comparison::Equal(cmp::Value::new("a")),
                    }];
         assert_eq!(store.find(&cmp)
                        .count(),
@@ -259,11 +259,11 @@ mod tests {
         store.insert(vec!["b", "x3"]);
         let cmp = [cmp::Condition {
                        column: 0,
-                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                       cmp: cmp::Comparison::Equal(cmp::Value::new("a")),
                    },
                    cmp::Condition {
                        column: 1,
-                       cmp: cmp::Comparison::Equal(cmp::Value::Const("x2")),
+                       cmp: cmp::Comparison::Equal(cmp::Value::new("x2")),
                    }];
         assert_eq!(store.find(&cmp).count(), 1);
         assert!(store.find(&cmp).all(|r| r[0] == "a" && r[1] == "x2"));
@@ -278,7 +278,7 @@ mod tests {
         store.index(0, idx::HashIndex::new());
         let cmp = [cmp::Condition {
                        column: 0,
-                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                       cmp: cmp::Comparison::Equal(cmp::Value::new("a")),
                    }];
         assert_eq!(store.find(&cmp)
                        .count(),
@@ -327,7 +327,7 @@ mod tests {
         store.insert(vec!["b", "x3"]);
         let cmp = [cmp::Condition {
                        column: 0,
-                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                       cmp: cmp::Comparison::Equal(cmp::Value::new("a")),
                    }];
         store.delete(&cmp);
         assert_eq!(store.find(&cmp).count(), 0);
@@ -344,7 +344,7 @@ mod tests {
         store.insert(vec!["b", "x3"]);
         let cmp = [cmp::Condition {
                        column: 0,
-                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                       cmp: cmp::Comparison::Equal(cmp::Value::new("a")),
                    }];
         store.delete(&cmp);
         assert_eq!(store.find(&cmp).count(), 0);
@@ -361,11 +361,11 @@ mod tests {
         store.insert(vec!["b", "x3"]);
         let cmp = [cmp::Condition {
                        column: 0,
-                       cmp: cmp::Comparison::Equal(cmp::Value::Const("a")),
+                       cmp: cmp::Comparison::Equal(cmp::Value::new("a")),
                    },
                    cmp::Condition {
                        column: 1,
-                       cmp: cmp::Comparison::Equal(cmp::Value::Const("x2")),
+                       cmp: cmp::Comparison::Equal(cmp::Value::new("x2")),
                    }];
         store.delete(&cmp);
         assert_eq!(store.find(&cmp).count(), 0);
