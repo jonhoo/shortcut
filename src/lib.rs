@@ -53,14 +53,14 @@ pub use idx::Index;
 /// given to the index, which (currently) take a full value, not just a borrow. This *might* change
 /// down the line, but it's tricky to get the lifetimes to work out, because the indices would then
 /// be scoped by the lifetime of the `Store`.
-pub struct Store<T: PartialOrd + Clone> {
+pub struct Store<T: Clone> {
     cols: usize,
     rowid: usize,
     rows: BTreeMap<usize, Vec<T>>,
     indices: HashMap<usize, Index<T>>,
 }
 
-impl<T: PartialOrd + Clone> Store<T> {
+impl<T: Ord + Clone> Store<T> {
     /// Allocate a new `Store` with the given number of columns. The column count is checked in
     /// `insert` at runtime (bleh).
     pub fn new(cols: usize) -> Store<T> {
@@ -75,9 +75,15 @@ impl<T: PartialOrd + Clone> Store<T> {
     /// Decide what index to use in order to match the given conditions most efficiently. Note that
     /// the iterator returned by this method will return a superset of the rows that match the
     /// given conditions. Users will need to match each individual row against `conds` again.
-    fn using_index<'a>(&'a self,
-                       conds: &'a [cmp::Condition<T>])
-                       -> Box<Iterator<Item = usize> + 'a> {
+    ///
+    /// The lifetime bounds here deserve some explanation. Previously, this was simply `'a` for
+    /// everything, but this means that the items returned from the iterator were bound by the
+    /// lifetime of the conditions. This is clearly not necessary. It also meant that you couldn't
+    /// `.collect()` the results and continue referring to them after the conditions have gone out
+    /// of scope.
+    fn using_index<'c, 's: 'c>(&'s self,
+                               conds: &'c [cmp::Condition<T>])
+                               -> Box<Iterator<Item = usize> + 's> {
 
         use EqualityIndex;
         let best_idx = conds.iter()
@@ -107,18 +113,13 @@ impl<T: PartialOrd + Clone> Store<T> {
     /// expected number of rows for a single value. This latter metric is generally the total
     /// number of rows divided by the number of entries in the index. See `EqualityIndex::estimate`
     /// for details.
-    ///
-    /// The lifetime bounds here deserve some explanation. Previously, this was simply `'a` for
-    /// everything, but this means that the items returned from the iterator were bound by the
-    /// lifetime of the conditions. This is clearly not necessary. It also meant that you couldn't
-    /// `.collect()` the results and continue referring to them after the conditions have gone out
-    /// of scope.
-    pub fn find<'s: 'c, 'c>(&'s self,
+    pub fn find<'c, 's: 'c>(&'s self,
                             conds: &'c [cmp::Condition<T>])
                             -> Box<Iterator<Item = &'s [T]> + 'c> {
+        let is_a_match = move |r: &&'s _| conds.iter().all(|c| c.matches(r));
         Box::new(self.using_index(conds)
             .map(move |rowi| &self.rows[&rowi][..])
-            .filter(move |row| conds.iter().all(|c| c.matches(row))))
+            .filter(is_a_match))
     }
 
     /// Delete all rows that match the given conditions.
