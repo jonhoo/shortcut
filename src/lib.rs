@@ -53,17 +53,32 @@ pub use idx::Index;
 /// given to the index, which (currently) take a full value, not just a borrow. This *might* change
 /// down the line, but it's tricky to get the lifetimes to work out, because the indices would then
 /// be scoped by the lifetime of the `Store`.
-pub struct Store<T: Clone> {
+pub struct Store<T, C = Vec<T>> {
     cols: usize,
     rowid: usize,
-    rows: BTreeMap<usize, Vec<T>>,
+    rows: BTreeMap<usize, C>,
     indices: HashMap<usize, Index<T>>,
 }
 
-impl<T: Ord + Clone> Store<T> {
+/// Implementors of `Row` can be used to store the individual rows of a `Store`.
+///
+/// The only requirement of implementors is that they can be indexed by a column number.
+/// To allow debug assertion on `Store` insertions, we also require `Row` implementors to be able
+/// to reveal the number of columns they are storing.
+pub trait Row<T> {
+    /// Look up the value in the given column of this `Row`.
+    fn index(&self, column: usize) -> &T;
+    /// Returns the number of columns in this `Row`.
+    fn columns(&self) -> usize;
+}
+
+impl<T, R> Store<T, R>
+    where T: Ord + Clone,
+          R: Row<T>
+{
     /// Allocate a new `Store` with the given number of columns. The column count is checked in
     /// `insert` at runtime (bleh).
-    pub fn new(cols: usize) -> Store<T> {
+    pub fn new(cols: usize) -> Store<T, R> {
         Store {
             cols: cols,
             rowid: 0,
@@ -115,10 +130,10 @@ impl<T: Ord + Clone> Store<T> {
     /// for details.
     pub fn find<'c, 's: 'c>(&'s self,
                             conds: &'c [cmp::Condition<'c, T>])
-                            -> Box<Iterator<Item = &'s [T]> + 'c> {
-        let is_a_match = move |r: &&'s _| conds.iter().all(|c| c.matches(r));
+                            -> Box<Iterator<Item = &'s R> + 'c> {
+        let is_a_match = move |r: &&'s _| conds.iter().all(|c| c.matches(*r));
         Box::new(self.using_index(conds)
-            .map(move |rowi| &self.rows[&rowi][..])
+            .map(move |rowi| &self.rows[&rowi])
             .filter(is_a_match))
     }
 
@@ -129,12 +144,15 @@ impl<T: Ord + Clone> Store<T> {
 
     /// Delete all rows that match the given conditions *and* where the given filter function
     /// returns true.
+    ///
+    /// This requires that `R` implements `IntoIterator`, and that the columns are yielded *in
+    /// column order*.
     pub fn delete_filter<F>(&mut self, conds: &[cmp::Condition<T>], mut f: F)
-        where F: FnMut(&[T]) -> bool
+        where F: FnMut(&R) -> bool
     {
         // find the rows we should delete
         let rowids = self.using_index(conds)
-            .map(|rowi| (rowi, &self.rows[&rowi][..]))
+            .map(|rowi| (rowi, &self.rows[&rowi]))
             .filter(move |&(_, row)| conds.iter().all(|c| c.matches(row)))
             .filter(|&(_, row)| f(row))
             .map(|(rowid, _)| rowid)
@@ -146,7 +164,7 @@ impl<T: Ord + Clone> Store<T> {
 
         for (rowid, row) in deleted.into_iter() {
             for (col, idx) in self.indices.iter_mut() {
-                idx.undex(&row[*col], rowid);
+                idx.undex(row.index(*col), rowid);
             }
         }
     }
@@ -158,12 +176,12 @@ impl<T: Ord + Clone> Store<T> {
     /// Inserting a row has similar complexity to `BTreeMap::insert`, and *may* need to re-allocate
     /// the backing memory for the `Store`. The insertion also updates all maintained indices,
     /// which may also re-allocate.
-    pub fn insert(&mut self, row: Vec<T>) {
-        assert_eq!(row.len(), self.cols);
+    pub fn insert(&mut self, row: R) {
+        debug_assert_eq!(row.columns(), self.cols);
         let rowid = self.rowid;
         for (column, idx) in self.indices.iter_mut() {
             use EqualityIndex;
-            idx.index(row[*column].clone(), rowid);
+            idx.index(row.index(*column).clone(), rowid);
         }
         self.rows.insert(self.rowid, row);
         self.rowid += 1;
@@ -181,10 +199,47 @@ impl<T: Ord + Clone> Store<T> {
 
         // populate the new index
         for (rowid, row) in self.rows.iter() {
-            idx.index(row[column].clone(), *rowid);
+            idx.index(row.index(column).clone(), *rowid);
         }
 
         self.indices.insert(column, idx);
+    }
+}
+
+impl<'a, T> Row<T> for &'a [T] {
+    fn index(&self, i: usize) -> &T {
+        &self[i]
+    }
+    fn columns(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<T> Row<T> for [T] {
+    fn index(&self, i: usize) -> &T {
+        &self[i]
+    }
+    fn columns(&self) -> usize {
+        self.len()
+    }
+}
+
+impl<T> Row<T> for Vec<T> {
+    fn index(&self, i: usize) -> &T {
+        &self[i]
+    }
+    fn columns(&self) -> usize {
+        self.len()
+    }
+}
+
+use std::sync;
+impl<T> Row<T> for sync::Arc<Vec<T>> {
+    fn index(&self, i: usize) -> &T {
+        &self[i]
+    }
+    fn columns(&self) -> usize {
+        self.len()
     }
 }
 
@@ -198,6 +253,16 @@ mod tests {
         store.insert(vec!["a1", "a2"]);
         store.insert(vec!["b1", "b2"]);
         store.insert(vec!["c1", "c2"]);
+        assert_eq!(store.find(&[]).count(), 3);
+    }
+
+    #[test]
+    fn it_works_w_non_vec() {
+        use std::sync;
+        let mut store = Store::new(2);
+        store.insert(sync::Arc::new(vec!["a1", "a2"]));
+        store.insert(sync::Arc::new(vec!["b1", "b2"]));
+        store.insert(sync::Arc::new(vec!["c1", "c2"]));
         assert_eq!(store.find(&[]).count(), 3);
     }
 

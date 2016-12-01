@@ -1,3 +1,4 @@
+use Row;
 use std::fmt;
 use std::borrow::Cow;
 use std::borrow::Borrow;
@@ -17,9 +18,9 @@ impl<'a, T: Clone + 'a> Value<'a, T> {
     /// Extract the value literal for this `Value` when evaluated for the given row.
     /// For `Const` values, this evaluates to the `Const` value itself. For `Column`, it evaluates
     /// to the value of that column in the given row.
-    pub fn value<'b: 'a>(&'b self, row: &'b [T]) -> &'b T {
+    pub fn value<'b: 'a, R: Row<T> + ?Sized>(&'b self, row: &'b R) -> &'b T {
         match *self {
-            Value::Column(i) => &row[i],
+            Value::Column(i) => &row.index(i),
             Value::Const(ref val) => val,
         }
     }
@@ -50,7 +51,7 @@ pub enum Comparison<'a, T: Clone + 'a> {
 impl<'a, T: Ord + Clone + 'a> Comparison<'a, T> {
     /// Returns true if the given value compares successfully against this `Value` when evaluated
     /// against the given row.
-    pub fn matches(&self, value: &T, row: &[T]) -> bool {
+    pub fn matches<R: Row<T> + ?Sized>(&self, value: &T, row: &R) -> bool {
         match *self {
             Comparison::Equal(ref v) => value == v.value(row),
         }
@@ -70,8 +71,8 @@ pub struct Condition<'a, T: Clone + 'a> {
 impl<'a, T: Ord + Clone + 'a> Condition<'a, T> {
     /// Returns true if this condition holds true for the given row. To determine if this is the
     /// case, `row[self.column]` is extracted, and is evaluated using the comparison in `self.cmp`.
-    pub fn matches(&self, row: &[T]) -> bool {
-        self.cmp.matches(&row[self.column], row)
+    pub fn matches<R: Row<T> + ?Sized>(&self, row: &R) -> bool {
+        self.cmp.matches(&row.index(self.column), row)
     }
 }
 
@@ -104,16 +105,20 @@ mod tests {
 
     #[test]
     fn value() {
-        assert_eq!(Value::column(0).value(&["a"]), &"a");
-        assert_eq!(Value::new("a").value(&["b"]), &"a");
+        let a = &["a"];
+        let b = &["b"];
+        assert_eq!(Value::column(0).value(&a[..]), &"a");
+        assert_eq!(Value::new("a").value(&b[..]), &"a");
     }
 
     #[test]
     fn cmp_eq() {
-        assert!(Comparison::Equal(Value::column(0)).matches(&"a", &["a"]));
-        assert!(!Comparison::Equal(Value::column(0)).matches(&"a", &["b"]));
-        assert!(Comparison::Equal(Value::new("a")).matches(&"a", &["b"]));
-        assert!(!Comparison::Equal(Value::new("b")).matches(&"a", &["a"]));
+        let a = &["a"];
+        let b = &["b"];
+        assert!(Comparison::Equal(Value::column(0)).matches(&"a", &a[..]));
+        assert!(!Comparison::Equal(Value::column(0)).matches(&"a", &b[..]));
+        assert!(Comparison::Equal(Value::new("a")).matches(&"a", &b[..]));
+        assert!(!Comparison::Equal(Value::new("b")).matches(&"a", &a[..]));
     }
 
     #[test]
@@ -155,12 +160,16 @@ mod tests {
             cmp: cmpcb,
         };
 
-        assert!(cf10.matches(&["a", "a"]));
-        assert!(!cf10.matches(&["a", "b"]));
-        assert!(cca.matches(&["a"]));
-        assert!(!cca.matches(&["b"]));
-        assert!(ccb.matches(&["b"]));
-        assert!(!ccb.matches(&["a"]));
+        let a = &["a"];
+        let b = &["b"];
+        let aa = &["a", "a"];
+        let ab = &["a", "b"];
+        assert!(cf10.matches(&aa[..]));
+        assert!(!cf10.matches(&ab[..]));
+        assert!(cca.matches(&a[..]));
+        assert!(!cca.matches(&b[..]));
+        assert!(ccb.matches(&b[..]));
+        assert!(!ccb.matches(&a[..]));
     }
 
     #[test]
