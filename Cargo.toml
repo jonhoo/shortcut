@@ -1,6 +1,6 @@
 [package]
 name = "shortcut"
-version = "4.0.1"
+version = "4.1.0"
 
 description = "an indexed, queryable column-based storage system"
 readme = "README.md"
