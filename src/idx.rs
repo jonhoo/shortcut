@@ -21,6 +21,7 @@ pub trait EqualityIndex<T> {
 }
 
 /// An implementation of `EqualityIndex` that uses a `HashMap`.
+#[derive(Clone)]
 pub struct HashIndex<K: Eq + Hash> {
     num: usize,
     map: HashMap<K, Vec<usize>>,
@@ -88,6 +89,7 @@ pub trait RangeIndex<T>: EqualityIndex<T> {
 }
 
 /// An implementation of `RangeIndex` using a `BTreeMap`.
+#[derive(Clone)]
 pub struct BTreeIndex<K: Ord + Eq> {
     num: usize,
     map: BTreeMap<K, Vec<usize>>,
