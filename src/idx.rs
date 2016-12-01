@@ -13,7 +13,7 @@ pub trait EqualityIndex<T> {
     fn index(&mut self, T, usize);
 
     /// Remove the given row index under the given value from the index.
-    fn undex(&mut self, T, usize);
+    fn undex(&mut self, &T, usize);
 
     /// Give the expected number of rows returned for a key.
     /// This method may be called often, and in rapid succession, and so should return quickly.
@@ -50,11 +50,10 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
         self.num += 1;
     }
 
-    fn undex(&mut self, key: T, row: usize) {
-        use std::collections::hash_map::Entry;
-        if let Entry::Occupied(mut e) = self.map.entry(key) {
-            let empty = {
-                let l = e.get_mut();
+    fn undex(&mut self, key: &T, row: usize) {
+        let mut empty = false;
+        if let Some(mut l) = self.map.get_mut(key) {
+            empty = {
                 match l.iter().position(|&r| r == row) {
                     Some(i) => {
                         l.swap_remove(i);
@@ -63,10 +62,9 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
                 }
                 l.is_empty()
             };
-
-            if empty {
-                e.remove();
-            }
+        }
+        if empty {
+            self.map.remove(key);
         }
     }
 
@@ -118,10 +116,8 @@ impl<T: Ord + Eq> EqualityIndex<T> for BTreeIndex<T> {
         self.num += 1;
     }
 
-    fn undex(&mut self, key: T, row: usize) {
-        use std::collections::btree_map::Entry;
-        if let Entry::Occupied(ref mut e) = self.map.entry(key) {
-            let l = e.get_mut();
+    fn undex(&mut self, key: &T, row: usize) {
+        if let Some(ref mut l) = self.map.get_mut(key) {
             self.num -= l.len();
             l.retain(|&i| i != row);
             self.num += l.len();
@@ -161,7 +157,7 @@ impl<T> EqualityIndex<T> for Index<T> {
             Index::Equality(ref mut ei) => ei.index(key, row),
         }
     }
-    fn undex(&mut self, key: T, row: usize) {
+    fn undex(&mut self, key: &T, row: usize) {
         match *self {
             Index::Range(ref mut ri) => ri.undex(key, row),
             Index::Equality(ref mut ei) => ei.undex(key, row),
@@ -200,7 +196,7 @@ mod tests {
         assert_eq!(eqidx.lookup(&"a").count(), 1);
         eqidx.index("a", 1);
         assert_eq!(eqidx.lookup(&"a").count(), 2);
-        eqidx.undex("a", 0);
+        eqidx.undex(&"a", 0);
         assert_eq!(eqidx.lookup(&"a").count(), 1);
     }
 
@@ -213,7 +209,7 @@ mod tests {
         assert_eq!(idx.lookup(&"a").count(), 1);
         idx.index("a", 1);
         assert_eq!(idx.lookup(&"a").count(), 2);
-        idx.undex("a", 0);
+        idx.undex(&"a", 0);
         assert_eq!(idx.lookup(&"a").count(), 1);
     }
 
@@ -228,7 +224,7 @@ mod tests {
         assert_eq!(idx.between(Included(&"a"), Included(&"b")).count(), 1);
         idx.index("b", 1);
         assert_eq!(idx.between(Included(&"a"), Included(&"b")).count(), 2);
-        idx.undex("b", 1);
+        idx.undex(&"b", 1);
         assert_eq!(idx.between(Included(&"a"), Included(&"b")).count(), 1);
     }
 }

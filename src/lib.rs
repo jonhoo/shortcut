@@ -144,15 +144,9 @@ impl<T: Ord + Clone> Store<T> {
             .map(|rowid| (rowid, self.rows.remove(&rowid).unwrap()))
             .collect::<Vec<_>>();
 
-        // we want to avoid having to clone out of row to pass a T to undex(), which we'd have to
-        // do if it were a Vec (or we'd have to do some trickery to not mess up the indices after
-        // calling .remove()). Instead, we allocate a single HashMap from column index -> T, which
-        // we populate for each row.
-        let mut rowcols = HashMap::with_capacity(self.cols);
         for (rowid, row) in deleted.into_iter() {
-            rowcols.extend(row.into_iter().enumerate());
             for (col, idx) in self.indices.iter_mut() {
-                idx.undex(rowcols.remove(col).unwrap(), rowid);
+                idx.undex(&row[*col], rowid);
             }
         }
     }
