@@ -130,7 +130,7 @@ impl<T: Ord + Eq> EqualityIndex<T> for BTreeIndex<T> {
 }
 impl<T: Ord + Eq> RangeIndex<T> for BTreeIndex<T> {
     fn between<'a>(&'a self, min: Bound<&T>, max: Bound<&T>) -> Box<Iterator<Item = usize> + 'a> {
-        Box::new(self.map.range(min, max).flat_map(|rows| rows.1.iter().map(|row| *row)))
+        Box::new(self.map.range((min, max)).flat_map(|rows| rows.1.iter().map(|row| *row)))
     }
 }
 
