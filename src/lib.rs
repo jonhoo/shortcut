@@ -26,7 +26,6 @@
 //!  - The system currently provides an add/remove-only abstraction (i.e., no edit).
 
 #![deny(missing_docs)]
-#![feature(btree_range, collections_bound)]
 
 use std::collections::HashMap;
 use std::collections::BTreeMap;
