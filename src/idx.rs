@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use std::collections::BTreeMap;
-use std::collections::Bound;
+use std::ops::Bound;
 
 /// An `EqualityIndex` is an index that can perform *efficient* equality lookups.
 pub trait EqualityIndex<T> {
@@ -216,7 +216,7 @@ mod tests {
     #[test]
     fn btree_range_index() {
         use super::RangeIndex;
-        use std::collections::Bound::Included;
+        use std::ops::Bound::Included;
 
         let mut idx = BTreeIndex::new();
         assert_eq!(idx.between(Included(&"a"), Included(&"b")).count(), 0);
