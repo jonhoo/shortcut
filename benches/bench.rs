@@ -12,12 +12,13 @@ extern crate shortcut;
 extern crate test;
 extern crate time;
 
+use std::borrow::Cow;
+
 use docopt::Docopt;
 use shortcut::cmp;
 use shortcut::idx;
 use shortcut::Store;
 use time::PreciseTime;
-
 
 const USAGE: &'static str = "
 Benchmark shortcut.
@@ -30,7 +31,6 @@ Options:
   --use-index              Install a hash index for fast lookups.
   --bench                  Appease `cargo bench`. No effect.
 ";
-
 
 fn main() {
     let args = Docopt::new(USAGE)
@@ -59,7 +59,7 @@ fn main() {
     for i in 0..rounds {
         let cmp = [cmp::Condition {
             column: 0,
-            cmp: cmp::Comparison::Equal(cmp::Value::Const(format!("{}", i))),
+            cmp: cmp::Comparison::Equal(cmp::Value::Const(Cow::Owned(format!("{}", i)))),
         }];
 
         let rows = store.find(&cmp);
@@ -71,13 +71,17 @@ fn main() {
 
     let t2 = PreciseTime::now();
 
-    println!("put time: {:.2}ms ({:.2} puts/sec)",
-             t0.to(t1).num_milliseconds(),
-             ops_per_sec(rounds, t0, t1));
+    println!(
+        "put time: {:.2}ms ({:.2} puts/sec)",
+        t0.to(t1).num_milliseconds(),
+        ops_per_sec(rounds, t0, t1)
+    );
 
-    println!("get time: {:.2}ms ({:.2} gets/sec)",
-             t1.to(t2).num_milliseconds(),
-             ops_per_sec(rounds, t1, t2));
+    println!(
+        "get time: {:.2}ms ({:.2} gets/sec)",
+        t1.to(t2).num_milliseconds(),
+        ops_per_sec(rounds, t1, t2)
+    );
 }
 
 fn ops_per_sec(rounds: u32, start: PreciseTime, end: PreciseTime) -> f64 {
