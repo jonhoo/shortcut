@@ -15,7 +15,7 @@ autoincremented row identifier similar to the one used by SQLite:
 https://www.sqlite.org/lang_createtable.html#rowid.
 
 What makes this crate interesting is that it also allows you to place indices on columns for
-fast lookups. These indices are automatically updates whenever the dataset changes, so that
+fast lookups. These indices are automatically updated whenever the dataset changes, so that
 queries continue to return correct results. Indices should conform to either the
 `EqualityIndex` trait or the `RangeIndex` trait. As you would expect, the former allows
 speeding up exact lookups, whereas the latter can also perform efficient range queries.
