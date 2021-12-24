@@ -4,7 +4,7 @@
 [![Documentation](https://docs.rs/shortcut/badge.svg)](https://docs.rs/shortcut/)
 [![Build Status](https://travis-ci.org/jonhoo/shortcut.svg?branch=master)](https://travis-ci.org/jonhoo/shortcut)
 
-This create provides an indexed, queryable column-based storage system.
+This crate provides an indexed, queryable column-based storage system.
 
 The storage system is, fundamentally, row-based storage, where all rows have the same number of
 columns. All columns are the same "type", but given that they can be enum types, you can
