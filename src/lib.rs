@@ -99,7 +99,6 @@ impl<T, R> Store<T, R>
                                conds: &'c [cmp::Condition<'c, T>])
                                -> Box<dyn Iterator<Item = usize> + 's> {
 
-        use EqualityIndex;
         let best_idx = conds.iter()
             .enumerate()
             .filter_map(|(ci, c)| self.indices.get(&c.column).and_then(|idx| Some((ci, idx))))
@@ -179,7 +178,6 @@ impl<T, R> Store<T, R>
         debug_assert_eq!(row.columns(), self.cols);
         let rowid = self.rowid;
         for (column, idx) in self.indices.iter_mut() {
-            use EqualityIndex;
             idx.index(row.index(*column).clone(), rowid);
         }
         self.rows.insert(self.rowid, row);
@@ -193,7 +191,6 @@ impl<T, R> Store<T, R>
     /// When an index is added, it is immediately fed all rows in the current dataset. Thus, adding
     /// an index to a `Store` with many rows can be fairly costly. Keep this in mind!
     pub fn index<I: Into<Index<T>>>(&mut self, column: usize, indexer: I) {
-        use EqualityIndex;
         let mut idx = indexer.into();
 
         // populate the new index
