@@ -97,7 +97,7 @@ impl<T, R> Store<T, R>
     /// of scope.
     fn using_index<'c, 's: 'c>(&'s self,
                                conds: &'c [cmp::Condition<'c, T>])
-                               -> Box<Iterator<Item = usize> + 's> {
+                               -> Box<dyn Iterator<Item = usize> + 's> {
 
         use EqualityIndex;
         let best_idx = conds.iter()
@@ -129,7 +129,7 @@ impl<T, R> Store<T, R>
     /// for details.
     pub fn find<'c, 's: 'c>(&'s self,
                             conds: &'c [cmp::Condition<'c, T>])
-                            -> Box<Iterator<Item = &'s R> + 'c> {
+                            -> Box<dyn Iterator<Item = &'s R> + 'c> {
         let is_a_match = move |r: &&'s _| conds.iter().all(|c| c.matches(*r));
         Box::new(self.using_index(conds)
             .map(move |rowi| &self.rows[&rowi])
