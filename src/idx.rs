@@ -52,7 +52,7 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
 
     fn undex(&mut self, key: &T, row: usize) {
         let mut empty = false;
-        if let Some(mut l) = self.map.get_mut(key) {
+        if let Some(l) = self.map.get_mut(key) {
             empty = {
                 match l.iter().position(|&r| r == row) {
                     Some(i) => {
