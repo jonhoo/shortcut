@@ -7,13 +7,13 @@ use std::ops::Bound;
 /// An `EqualityIndex` is an index that can perform *efficient* equality lookups.
 pub trait EqualityIndex<T> {
     /// Return an iterator that yields the indices of all rows that match the given value.
-    fn lookup<'a>(&'a self, &T) -> Box<Iterator<Item = usize> + 'a>;
+    fn lookup<'a>(&'a self, key: &T) -> Box<Iterator<Item = usize> + 'a>;
 
     /// Add the given row index to the index under the given value.
-    fn index(&mut self, T, usize);
+    fn index(&mut self, key: T, row: usize);
 
     /// Remove the given row index under the given value from the index.
-    fn undex(&mut self, &T, usize);
+    fn undex(&mut self, key: &T, row: usize);
 
     /// Give the expected number of rows returned for a key.
     /// This method may be called often, and in rapid succession, and so should return quickly.
@@ -83,7 +83,7 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
 pub trait RangeIndex<T>: EqualityIndex<T> {
     /// Return an iterator that yields the indices of all rows whose value (in the column this
     /// index is assigned to) lies within the given `Bound`s.
-    fn between<'a>(&'a self, Bound<&T>, Bound<&T>) -> Box<Iterator<Item = usize> + 'a>;
+    fn between<'a>(&'a self, min: Bound<&T>, max: Bound<&T>) -> Box<Iterator<Item = usize> + 'a>;
 }
 
 /// An implementation of `RangeIndex` using a `BTreeMap`.
