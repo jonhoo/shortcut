@@ -7,13 +7,13 @@ use std::ops::Bound;
 /// An `EqualityIndex` is an index that can perform *efficient* equality lookups.
 pub trait EqualityIndex<T> {
     /// Return an iterator that yields the indices of all rows that match the given value.
-    fn lookup<'a>(&'a self, &T) -> Box<Iterator<Item = usize> + 'a>;
+    fn lookup<'a>(&'a self, key: &T) -> Box<dyn Iterator<Item = usize> + 'a>;
 
     /// Add the given row index to the index under the given value.
-    fn index(&mut self, T, usize);
+    fn index(&mut self, key: T, row: usize);
 
     /// Remove the given row index under the given value from the index.
-    fn undex(&mut self, &T, usize);
+    fn undex(&mut self, key: &T, row: usize);
 
     /// Give the expected number of rows returned for a key.
     /// This method may be called often, and in rapid succession, and so should return quickly.
@@ -38,7 +38,7 @@ impl<K: Eq + Hash> HashIndex<K> {
 }
 
 impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
-    fn lookup<'a>(&'a self, key: &T) -> Box<Iterator<Item = usize> + 'a> {
+    fn lookup<'a>(&'a self, key: &T) -> Box<dyn Iterator<Item = usize> + 'a> {
         match self.map.get(key) {
             Some(ref v) => Box::new(v.iter().map(|row| *row)),
             None => Box::new(None.into_iter()),
@@ -52,7 +52,7 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
 
     fn undex(&mut self, key: &T, row: usize) {
         let mut empty = false;
-        if let Some(mut l) = self.map.get_mut(key) {
+        if let Some(l) = self.map.get_mut(key) {
             empty = {
                 match l.iter().position(|&r| r == row) {
                     Some(i) => {
@@ -83,7 +83,7 @@ impl<T: Eq + Hash> EqualityIndex<T> for HashIndex<T> {
 pub trait RangeIndex<T>: EqualityIndex<T> {
     /// Return an iterator that yields the indices of all rows whose value (in the column this
     /// index is assigned to) lies within the given `Bound`s.
-    fn between<'a>(&'a self, Bound<&T>, Bound<&T>) -> Box<Iterator<Item = usize> + 'a>;
+    fn between<'a>(&'a self, min: Bound<&T>, max: Bound<&T>) -> Box<dyn Iterator<Item = usize> + 'a>;
 }
 
 /// An implementation of `RangeIndex` using a `BTreeMap`.
@@ -104,7 +104,7 @@ impl<K: Ord + Eq> BTreeIndex<K> {
 }
 
 impl<T: Ord + Eq> EqualityIndex<T> for BTreeIndex<T> {
-    fn lookup<'a>(&'a self, key: &T) -> Box<Iterator<Item = usize> + 'a> {
+    fn lookup<'a>(&'a self, key: &T) -> Box<dyn Iterator<Item = usize> + 'a> {
         match self.map.get(key) {
             Some(ref v) => Box::new(v.iter().map(|row| *row)),
             None => Box::new(None.into_iter()),
@@ -129,7 +129,7 @@ impl<T: Ord + Eq> EqualityIndex<T> for BTreeIndex<T> {
     }
 }
 impl<T: Ord + Eq> RangeIndex<T> for BTreeIndex<T> {
-    fn between<'a>(&'a self, min: Bound<&T>, max: Bound<&T>) -> Box<Iterator<Item = usize> + 'a> {
+    fn between<'a>(&'a self, min: Bound<&T>, max: Bound<&T>) -> Box<dyn Iterator<Item = usize> + 'a> {
         Box::new(self.map.range((min, max)).flat_map(|rows| rows.1.iter().map(|row| *row)))
     }
 }
@@ -139,13 +139,13 @@ impl<T: Ord + Eq> RangeIndex<T> for BTreeIndex<T> {
 /// that trait to the underlying index for convenience.
 pub enum Index<T> {
     /// A `RangeIndex` trait object.
-    Range(Box<RangeIndex<T> + Send + Sync>),
+    Range(Box<dyn RangeIndex<T> + Send + Sync>),
     /// An `EqualityIndex` trait object.
-    Equality(Box<EqualityIndex<T> + Send + Sync>),
+    Equality(Box<dyn EqualityIndex<T> + Send + Sync>),
 }
 
 impl<T> EqualityIndex<T> for Index<T> {
-    fn lookup<'a>(&'a self, key: &T) -> Box<Iterator<Item = usize> + 'a> {
+    fn lookup<'a>(&'a self, key: &T) -> Box<dyn Iterator<Item = usize> + 'a> {
         match *self {
             Index::Range(ref ri) => ri.lookup(key),
             Index::Equality(ref ei) => ei.lookup(key),
